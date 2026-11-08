@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Semantic Versioning バンプルールクイズ</title>
+<script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-900 text-gray-100 min-h-screen p-4">
+<div class="max-w-2xl mx-auto">
+  <h1 class="text-2xl font-bold text-center text-cyan-400 mb-1">Semantic Versioning クイズ</h1>
+  <p class="text-center text-gray-400 text-sm mb-4">変更内容を読んで正しいバージョンバンプを選ぼう</p>
+
+  <div class="bg-gray-800 rounded-xl p-3 mb-4 grid grid-cols-3 gap-3 text-center">
+    <div><div class="text-lg font-bold text-green-400" id="stat-score">0</div><div class="text-xs text-gray-400">正解</div></div>
+    <div><div class="text-lg font-bold text-blue-400" id="stat-num">0 / 30</div><div class="text-xs text-gray-400">問題</div></div>
+    <div><div class="text-lg font-bold text-yellow-400" id="stat-pct">—</div><div class="text-xs text-gray-400">正解率</div></div>
+  </div>
+
+  <div id="quiz-area">
+    <div class="bg-gray-800 rounded-xl p-5 mb-4">
+      <div class="flex justify-between items-start mb-3">
+        <span class="text-xs bg-gray-700 text-gray-300 px-2 py-1 rounded" id="q-tag"></span>
+        <span class="text-xs text-gray-500" id="q-num"></span>
+      </div>
+      <div class="text-sm text-gray-400 mb-2">現在のバージョン: <span class="font-mono text-white" id="current-ver"></span></div>
+      <div class="text-base font-medium text-white mb-5" id="q-scenario"></div>
+      <div class="grid grid-cols-3 gap-3" id="choices"></div>
+      <div id="feedback" class="hidden mt-4 p-3 rounded-lg">
+        <div id="feedback-title" class="font-semibold mb-1"></div>
+        <div id="feedback-body" class="text-sm text-gray-300 mb-2"></div>
+        <div class="font-mono text-sm text-cyan-300" id="feedback-ver"></div>
+        <button onclick="nextQ()" class="mt-3 w-full bg-gray-600 hover:bg-gray-500 rounded py-2 text-sm text-white" aria-label="次の問題">次の問題 →</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="result-area" class="hidden bg-gray-800 rounded-xl p-5 mb-4">
+    <h2 class="text-xl font-bold text-center text-cyan-400 mb-3">クイズ完了！</h2>
+    <div class="text-center text-4xl font-bold mb-2" id="final-score"></div>
+    <div class="text-center text-gray-400 mb-4" id="final-msg"></div>
+    <div id="wrong-review" class="space-y-2 mt-3"></div>
+    <button onclick="startQuiz()" class="mt-4 w-full bg-cyan-600 hover:bg-cyan-500 rounded-lg py-3 text-white font-semibold" aria-label="もう一度">もう一度</button>
+  </div>
+</div>
+<script>
+const QUESTIONS = [
+  {scenario:'APIの既存エンドポイントを削除した',answer:'MAJOR',tag:'破壊的変更',explanation:'後方互換性のないAPI変更はMAJOR。'},
+  {scenario:'後方互換性のないデータベーススキーマ変更を行った',answer:'MAJOR',tag:'破壊的変更',explanation:'既存のクライアントが動作しなくなるためMAJOR。'},
+  {scenario:'関数の引数の型を変更した（後方互換なし）',answer:'MAJOR',tag:'破壊的変更',explanation:'シグネチャ変更で既存コードが壊れるためMAJOR。'},
+  {scenario:'既存の設定ファイルフォーマットを廃止し新形式に移行した',answer:'MAJOR',tag:'破壊的変更',explanation:'既存の設定ファイルが使えなくなるためMAJOR。'},
+  {scenario:'パブリックAPIに新しいオプションのパラメータを追加した',answer:'MINOR',tag:'後方互換あり',explanation:'後方互換性を保ちつつ機能追加はMINOR。'},
+  {scenario:'新しいAPIエンドポイントを追加した（既存は変更なし）',answer:'MINOR',tag:'後方互換あり',explanation:'機能追加で後方互換あり → MINOR。'},
+  {scenario:'新しいプラグインシステムを実装した（既存API変更なし）',answer:'MINOR',tag:'後方互換あり',explanation:'後方互換を保ちながら機能追加 → MINOR。'},
+  {scenario:'ライブラリに新しいユーティリティクラスを追加した',answer:'MINOR',tag:'後方互換あり',explanation:'後方互換を維持した機能追加 → MINOR。'},
+  {scenario:'既存機能のパフォーマンスを改善したがAPIは変更なし',answer:'PATCH',tag:'バグ修正',explanation:'APIが変わらない内部改善 → PATCH。'},
+  {scenario:'ドキュメントの誤字を修正した',answer:'PATCH',tag:'バグ修正',explanation:'コード変更のないドキュメント修正 → PATCH。'},
+  {scenario:'セキュリティ脆弱性を修正した（APIは変更なし）',answer:'PATCH',tag:'バグ修正',explanation:'後方互換を保つバグ修正 → PATCH。'},
+  {scenario:'ユニットテストを追加した（本体コード変更なし）',answer:'PATCH',tag:'バグ修正',explanation:'テスト追加のみの変更 → PATCH。'},
+  {scenario:'既存の関数の戻り値のバグを修正した',answer:'PATCH',tag:'バグ修正',explanation:'バグ修正でAPIは変わらない → PATCH。'},
+  {scenario:'依存ライブラリのパッチバージョンを更新した',answer:'PATCH',tag:'バグ修正',explanation:'依存関係のパッチ更新 → PATCH。'},
+  {scenario:'コミットメッセージに "BREAKING CHANGE:" フッターを含むコミットがある',answer:'MAJOR',tag:'BREAKING CHANGE',explanation:'BREAKING CHANGEフラグは必ずMAJOR。'},
+  {scenario:'feat: コミットがあり BREAKING CHANGE フッターがある',answer:'MAJOR',tag:'BREAKING CHANGE',explanation:'feat でも BREAKING CHANGE があれば MAJOR。'},
+  {scenario:'fix: プレフィックスのコミットのみ（BREAKING CHANGEなし）',answer:'PATCH',tag:'Conventional Commits',explanation:'fix: → PATCH。'},
+  {scenario:'feat: プレフィックスのコミットがある（BREAKING CHANGEなし）',answer:'MINOR',tag:'Conventional Commits',explanation:'feat: → MINOR。'},
+  {scenario:'refactor: プレフィックスのコミットのみ',answer:'PATCH',tag:'Conventional Commits',explanation:'リファクタリングは PATCH（機能変更なし）。'},
+  {scenario:'現在 1.0.0-alpha.1 — アルファ版で機能追加した（後方互換あり）',answer:'MINOR',tag:'プレリリース',explanation:'0.x.x は安定版扱いでないが、機能追加 → MINOR。'},
+  {scenario:'現在 0.3.0 — 後方互換なし変更を行った',answer:'MAJOR',tag:'0.x.x',explanation:'0.x.x でも破壊的変更はMAJOR（ただし 0.x は不安定版扱いが多い）。'},
+  {scenario:'現在 2.0.0-rc.1 — バグ修正してリリース候補を更新したい',answer:'PATCH',tag:'プレリリース',explanation:'RC版のバグ修正 → PATCH でプレリリース番号更新。'},
+  {scenario:'既存の deprecated 関数を完全に削除した',answer:'MAJOR',tag:'破壊的変更',explanation:'削除は後方互換性を壊すためMAJOR。'},
+  {scenario:'エラーメッセージのテキストのみを変更した（型・構造は変更なし）',answer:'PATCH',tag:'バグ修正',explanation:'パブリックAPIに影響しない内部テキスト変更 → PATCH。'},
+  {scenario:'新しいオプション設定キーを追加した（既存キーは有効のまま）',answer:'MINOR',tag:'後方互換あり',explanation:'後方互換を保ちつつ設定追加 → MINOR。'},
+  {scenario:'ビルドシステムのみ変更（npm scriptsの整理、CI設定更新）',answer:'PATCH',tag:'ビルド',explanation:'ビルド設定変更のみ → PATCH。'},
+  {scenario:'関数を非推奨（deprecated）にマークした（まだ使用可能）',answer:'MINOR',tag:'後方互換あり',explanation:'非推奨マークは後方互換を保ちMINOR。'},
+  {scenario:'ビルドメタデータ +build.123 を付けたい（バージョン優先度は変えない）',answer:'PATCH',tag:'ビルドメタデータ',explanation:'ビルドメタデータはバージョン優先度に影響しないがリリース → PATCH。'},
+  {scenario:'既存テストのリファクタリングのみ（本体コード変更なし）',answer:'PATCH',tag:'テスト',explanation:'テストリファクタのみ → PATCH。'},
+  {scenario:'パッケージの内部実装を書き換えたが、全パブリックAPIは同一',answer:'PATCH',tag:'リファクタ',explanation:'外部インタフェース変更なし → PATCH。'},
+];
+
+const VERSIONS = ['1.0.0','1.4.2','2.3.1','0.9.5','3.0.0','1.2.0','4.1.3','0.3.0','1.0.0-alpha.1','2.0.0-rc.1'];
+function bumpVer(ver, type) {
+  const base = ver.replace(/-.*/, '');
+  const [maj, min, pat] = base.split('.').map(Number);
+  if (type === 'MAJOR') return `${maj+1}.0.0`;
+  if (type === 'MINOR') return `${maj}.${min+1}.0`;
+  return `${maj}.${min}.${pat+1}`;
+}
+
+let qs = [], qIdx = 0, score = 0, wrong = [], currentVer = '';
+
+function shuffle(arr) { return [...arr].sort(() => Math.random() - 0.5); }
+
+function startQuiz() {
+  qs = shuffle(QUESTIONS);
+  qIdx = 0; score = 0; wrong = [];
+  document.getElementById('quiz-area').classList.remove('hidden');
+  document.getElementById('result-area').classList.add('hidden');
+  showQ();
+}
+
+function showQ() {
+  if (qIdx >= qs.length) { showResult(); return; }
+  const q = qs[qIdx];
+  currentVer = VERSIONS[qIdx % VERSIONS.length];
+  document.getElementById('q-tag').textContent = q.tag;
+  document.getElementById('q-num').textContent = `${qIdx + 1} / ${qs.length}`;
+  document.getElementById('current-ver').textContent = currentVer;
+  document.getElementById('q-scenario').textContent = q.scenario;
+  document.getElementById('stat-num').textContent = `${qIdx} / ${qs.length}`;
+  document.getElementById('feedback').classList.add('hidden');
+
+  const types = shuffle(['MAJOR', 'MINOR', 'PATCH']);
+  const colors = { MAJOR: 'bg-red-700 hover:bg-red-600', MINOR: 'bg-yellow-700 hover:bg-yellow-600', PATCH: 'bg-green-700 hover:bg-green-600' };
+  document.getElementById('choices').innerHTML = types.map(t => `
+    <button onclick="answer('${t}')" class="${colors[t]} rounded-xl py-4 text-white font-bold text-lg transition" aria-label="${t}を選択">
+      <div>${t}</div>
+      <div class="text-xs font-normal mt-1 opacity-80">${t==='MAJOR'?'破壊的変更':t==='MINOR'?'機能追加':'バグ修正'}</div>
+    </button>
+  `).join('');
+}
+
+function answer(selected) {
+  document.querySelectorAll('#choices button').forEach(b => b.disabled = true);
+  const q = qs[qIdx];
+  const isCorrect = selected === q.answer;
+  if (isCorrect) { score++; }
+  else { wrong.push({ q, selected }); }
+  document.getElementById('stat-score').textContent = score;
+  const total = qIdx + 1;
+  document.getElementById('stat-pct').textContent = Math.round(score / total * 100) + '%';
+
+  const fb = document.getElementById('feedback');
+  fb.classList.remove('hidden');
+  fb.className = 'mt-4 p-3 rounded-lg ' + (isCorrect ? 'bg-green-900/50 border border-green-700' : 'bg-red-900/50 border border-red-700');
+  document.getElementById('feedback-title').textContent = isCorrect ? '✓ 正解！' : `✗ 不正解 — 正解は ${q.answer}`;
+  document.getElementById('feedback-body').textContent = q.explanation;
+  document.getElementById('feedback-ver').textContent = currentVer + ' → ' + bumpVer(currentVer, q.answer);
+}
+
+function nextQ() { qIdx++; showQ(); }
+
+function showResult() {
+  document.getElementById('quiz-area').classList.add('hidden');
+  document.getElementById('result-area').classList.remove('hidden');
+  const pct = Math.round(score / qs.length * 100);
+  document.getElementById('final-score').textContent = `${score} / ${qs.length} (${pct}%)`;
+  const msg = pct >= 90 ? 'SemVer マスター！🎉' : pct >= 70 ? '良い理解度です！' : pct >= 50 ? 'もう少し頑張ろう' : 'SemVerを復習しよう';
+  document.getElementById('final-msg').textContent = msg;
+
+  const wr = document.getElementById('wrong-review');
+  if (wrong.length > 0) {
+    wr.innerHTML = '<div class="text-sm font-semibold text-red-300 mb-2">間違えた問題:</div>' +
+      wrong.map(({q, selected}) => `
+        <div class="bg-gray-700 rounded-lg p-3 text-sm">
+          <div class="text-gray-300 mb-1">${q.scenario}</div>
+          <div class="text-red-400">あなた: ${selected}</div>
+          <div class="text-green-400">正解: ${q.answer} — ${q.explanation}</div>
+        </div>
+      `).join('');
+  } else {
+    wr.innerHTML = '<div class="text-green-400 text-sm text-center">全問正解！完璧です！</div>';
+  }
+}
+
+startQuiz();
+</script>
+</body>
+</html>

@@ -1,0 +1,3 @@
+# Semantic Versioningバンプルールクイズ
+
+変更内容の説明を読んでMAJOR/MINOR/PATCHのどれをバンプするか答える全30問クイズ。BREAKING CHANGEフラグ・プレリリース版・Conventional Commitsのシナリオを含み、解説と誤答レビュー付き。
